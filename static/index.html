@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Veracode Sandbox Vulnerability & Metrics Tracker</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased">
+
+  <!-- ================= TOP HEADER ================= -->
+  <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-40 shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-700 flex items-center justify-center text-white shadow-md shadow-blue-900/40">
+          <i class="fa-solid fa-shield-halved text-xl"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-lg font-bold tracking-tight text-white">Veracode Sandbox Tracker</h1>
+            <span class="text-xs bg-blue-950 text-blue-300 border border-blue-700/50 px-2 py-0.5 rounded-full font-semibold">SAST & SCA Multi-Sandbox</span>
+          </div>
+          <p class="text-xs text-slate-400">Sandbox Isolation Security Telemetry • Latest Scan Statuses • Metrics & Reports</p>
+        </div>
+      </div>
+
+      <!-- Live Environment / Demo Status Indicator & Actions -->
+      <div class="flex items-center space-x-3">
+        
+        <!-- Status Indicator Pill -->
+        <div id="connectionStatusBadge" class="flex items-center space-x-2 bg-slate-800/80 border border-slate-700 px-3 py-1.5 rounded-full text-xs font-medium cursor-pointer hover:border-slate-600 transition" onclick="openSettingsModal()">
+          <span id="statusIndicatorDot" class="w-2.5 h-2.5 rounded-full bg-cyan-400 status-pulse-cyan"></span>
+          <span id="statusBadgeText" class="text-slate-300">Checking Connection...</span>
+          <span id="regionBadge" class="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded uppercase">US</span>
+        </div>
+
+        <!-- Global Refresh Button -->
+        <button id="refreshBtn" onclick="handleRefreshAll()" class="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-700 transition">
+          <i class="fa-solid fa-arrows-rotate" id="refreshIcon"></i>
+          <span>Refresh</span>
+        </button>
+
+        <!-- Settings Modal Trigger -->
+        <button onclick="openSettingsModal()" class="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition">
+          <i class="fa-solid fa-key"></i>
+          <span>API Auth & Config</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ================= MAIN CONTAINER ================= -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5">
+
+    <!-- Top Alert Banner (Policy Scans Excluded Note) -->
+    <div class="bg-gradient-to-r from-blue-950/60 to-slate-900 border border-blue-800/40 rounded-xl p-3 flex items-center justify-between text-xs text-blue-200">
+      <div class="flex items-center space-x-2.5">
+        <i class="fa-solid fa-circle-info text-blue-400 text-sm"></i>
+        <span>
+          <strong>Sandbox Isolation Mode:</strong> Strictly monitoring isolated developer sandbox scans (<code class="bg-blue-900/40 text-blue-300 px-1 py-0.5 rounded">context={sandbox_guid}</code>). Policy production scans are excluded as per requirements.
+        </span>
+      </div>
+      <div id="activeModeNotice" class="hidden sm:inline-block font-mono text-[11px] text-cyan-400 bg-cyan-950/60 border border-cyan-800/50 px-2.5 py-1 rounded">
+        DEMO SIMULATION ACTIVE
+      </div>
+    </div>
+
+    <!-- ================= CONTEXT SELECTORS CARD (MULTI-APP & MULTI-SANDBOX) ================= -->
+    <section class="glass-panel rounded-2xl p-5 shadow-xl border border-slate-800">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- 1. Multi-Application Selector Panel -->
+        <div class="flex flex-col">
+          <div class="flex items-center justify-between mb-1.5">
+            <div class="flex items-center space-x-2">
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                <i class="fa-solid fa-layer-group text-blue-400 mr-1.5"></i>1. Select Applications
+              </label>
+              <span id="selectedAppsCountBadge" class="bg-blue-950 text-blue-300 border border-blue-700/80 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                0 Selected
+              </span>
+            </div>
+            <div class="flex items-center space-x-2 text-[11px]">
+              <button type="button" onclick="selectAllApplications()" class="text-blue-400 hover:text-blue-300 font-medium transition">
+                Select All
+              </button>
+              <span class="text-slate-600">|</span>
+              <button type="button" onclick="clearApplicationSelection()" class="text-slate-400 hover:text-slate-300 transition">
+                Clear All
+              </button>
+            </div>
+          </div>
+
+          <!-- Applications Scrollable Checklist -->
+          <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-2.5 max-h-52 overflow-y-auto space-y-1.5 shadow-inner">
+            <div id="multiAppList" class="space-y-1.5">
+              <div class="p-4 text-center text-slate-500 text-xs">
+                <i class="fa-solid fa-spinner fa-spin text-blue-400 mb-1 block"></i>Loading applications...
+              </div>
+            </div>
+          </div>
+          
+          <div class="mt-1.5 flex items-center justify-between text-[10px] text-slate-400 px-1">
+            <span><i class="fa-solid fa-circle-check text-blue-400 mr-1"></i>Select one or multiple applications</span>
+            <span id="appTotalCountHint" class="font-mono text-slate-400">Total: 0 apps</span>
+          </div>
+        </div>
+
+        <!-- 2. Multi-Sandbox Selector Panel -->
+        <div class="flex flex-col">
+          <div class="flex items-center justify-between mb-1.5">
+            <div class="flex items-center space-x-2">
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                <i class="fa-solid fa-boxes-stacked text-emerald-400 mr-1.5"></i>2. Select Sandboxes
+              </label>
+              <span id="selectedCountBadge" class="bg-emerald-950 text-emerald-300 border border-emerald-700/80 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                0 Selected
+              </span>
+            </div>
+            <div class="flex items-center space-x-2 text-[11px]">
+              <button type="button" onclick="selectAllSandboxes()" class="text-blue-400 hover:text-blue-300 font-medium transition">
+                Select All
+              </button>
+              <span class="text-slate-600">|</span>
+              <button type="button" onclick="clearSandboxSelection()" class="text-slate-400 hover:text-slate-300 transition">
+                Clear All
+              </button>
+            </div>
+          </div>
+
+          <!-- Multi-Sandbox Checklist Container -->
+          <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-2.5 max-h-52 overflow-y-auto space-y-1.5 shadow-inner">
+            <div id="multiSandboxList" class="space-y-1.5">
+              <div class="p-4 text-center text-slate-500 text-xs">Select at least one application to view sandboxes.</div>
+            </div>
+          </div>
+          
+          <div class="mt-1.5 flex items-center justify-between text-[10px] text-slate-400 px-1">
+            <span><i class="fa-solid fa-circle-check text-emerald-400 mr-1"></i>Checked sandboxes are included in telemetry & reports</span>
+            <span id="sandboxTotalCountHint" class="font-mono text-slate-400">Total: 0 sandboxes</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ================= MULTI-SANDBOX STATUS SUMMARY BANNER ================= -->
+    <section id="scanStatusSection" class="glass-panel rounded-2xl p-4 border border-slate-800 shadow-xl space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+          <i class="fa-solid fa-satellite-dish text-emerald-400"></i>
+          <span>Latest Sandbox Scan Statuses (<span id="statusReportedCount">0</span> Selected)</span>
+        </h3>
+        <span class="text-[11px] text-slate-400">All scans isolated to branch sandbox scope</span>
+      </div>
+
+      <!-- Grid of Status Badges for each Selected Sandbox -->
+      <div id="sandboxesStatusContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <!-- Dynamically rendered status cards -->
+      </div>
+    </section>
+
+    <!-- ================= REPORTS & EXPORTS COMMAND BAR ================= -->
+    <section class="glass-panel rounded-xl p-3.5 border border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+      <div class="flex items-center space-x-2.5">
+        <i class="fa-solid fa-file-arrow-down text-cyan-400 text-lg"></i>
+        <div>
+          <div class="text-xs font-bold text-white">Reports & Data Downloads</div>
+          <div class="text-[11px] text-slate-400">Downloads cover all latest scans reported instances for the selected sandboxes</div>
+        </div>
+      </div>
+
+      <!-- Action Buttons for PDF, XML, Excel, and CSV -->
+      <div class="flex flex-wrap items-center gap-2">
+        
+        <!-- Excel Download (.xlsx) -->
+        <button onclick="handleDownloadReport('excel')" class="flex items-center space-x-1.5 bg-emerald-900/90 hover:bg-emerald-800 text-emerald-100 border border-emerald-600 px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-sm">
+          <i class="fa-solid fa-file-excel text-emerald-300"></i>
+          <span>Download All Instances (Excel .xlsx)</span>
+        </button>
+
+        <!-- PDF Report Download -->
+        <div class="relative group">
+          <button onclick="handleDownloadReport('pdf')" class="flex items-center space-x-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-700 px-3.5 py-2 rounded-lg text-xs font-bold transition shadow-sm">
+            <i class="fa-solid fa-file-pdf text-rose-400"></i>
+            <span>Download PDF Report</span>
+            <span id="pdfSourceBadge" class="hidden ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-700 text-rose-100">Veracode</span>
+          </button>
+        </div>
+
+        <!-- XML Report Download -->
+        <div class="relative group">
+          <button onclick="handleDownloadReport('xml')" class="flex items-center space-x-1.5 bg-cyan-950/80 hover:bg-cyan-900 text-cyan-200 border border-cyan-700 px-3 py-2 rounded-lg text-xs font-bold transition shadow-sm">
+            <i class="fa-solid fa-file-code text-cyan-400"></i>
+            <span>Download XML Report</span>
+            <span id="xmlSourceBadge" class="hidden ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-700 text-cyan-100">Veracode</span>
+          </button>
+        </div>
+
+        <!-- CSV Export -->
+        <button onclick="handleDownloadReport('csv')" class="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-2 rounded-lg text-xs font-semibold transition">
+          <i class="fa-solid fa-file-csv"></i>
+          <span>CSV</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- ================= VERACODE NATIVE REPORTS PANEL ================= -->
+    <section id="nativeReportsPanel" class="hidden glass-panel rounded-xl p-4 border border-cyan-900/50 shadow-lg space-y-2">
+      <div class="flex items-center space-x-2 mb-2">
+        <i class="fa-solid fa-shield-halved text-cyan-400 text-base"></i>
+        <div>
+          <div class="text-xs font-bold text-cyan-200">Veracode Platform Native Reports</div>
+          <div class="text-[11px] text-slate-400">Official detailed reports from <code class="text-cyan-300">detailedreportpdf.do</code> / <code class="text-cyan-300">detailedreport.do</code></div>
+        </div>
+      </div>
+      <div id="nativeReportsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+        <!-- Cards rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- ================= METRICS TABULAR &amp; KPI OVERVIEW ================= -->
+    <section class="space-y-4">
+      
+      <!-- Section Header -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-slate-100 flex items-center space-x-2">
+            <i class="fa-solid fa-chart-pie text-cyan-400"></i>
+            <span>Vulnerability Metrics & Tabular Summaries</span>
+          </h2>
+          <p class="text-xs text-slate-400">Aggregated flaw distribution, severity, mitigation status data, and scan types</p>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        
+        <!-- Total Flaws -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-sm">
+          <div class="text-[10px] font-semibold text-slate-400 uppercase">Total Flaws</div>
+          <div id="kpiTotalFlaws" class="text-2xl font-bold text-white mt-1">0</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Across Selected Sandboxes</div>
+        </div>
+
+        <!-- Critical & High (Sev 4-5) -->
+        <div class="bg-slate-900/90 border border-red-900/40 rounded-xl p-3 shadow-sm">
+          <div class="text-[10px] font-semibold text-red-400 uppercase">Critical & High</div>
+          <div id="kpiCritHigh" class="text-2xl font-bold text-red-400 mt-1">0</div>
+          <div class="text-[10px] text-red-300/60 mt-0.5">Severity 4 & 5</div>
+        </div>
+
+        <!-- Unmitigated Flaws -->
+        <div class="bg-slate-900/90 border border-rose-900/40 rounded-xl p-3 shadow-sm">
+          <div class="text-[10px] font-semibold text-rose-400 uppercase">Unmitigated Flaws</div>
+          <div id="kpiUnmitigated" class="text-2xl font-bold text-rose-400 mt-1">0</div>
+          <div class="text-[10px] text-rose-300/60 mt-0.5">Require Action</div>
+        </div>
+
+        <!-- Mitigation Proposed / Approved -->
+        <div class="bg-slate-900/90 border border-cyan-900/40 rounded-xl p-3 shadow-sm">
+          <div class="text-[10px] font-semibold text-cyan-400 uppercase">In Mitigation</div>
+          <div class="text-xl font-bold text-cyan-300 mt-1 flex items-center justify-between">
+            <span>Prop: <span id="kpiMitProposed">0</span></span>
+            <span class="text-emerald-400">Appr: <span id="kpiMitApproved">0</span></span>
+          </div>
+          <div class="text-[10px] text-cyan-300/60 mt-0.5">Under Review / Approved</div>
+        </div>
+
+        <!-- SAST vs SCA Counts -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow-sm">
+          <div class="text-[10px] font-semibold text-slate-400 uppercase">Scan Breakdown</div>
+          <div class="text-base font-bold text-slate-200 mt-1 flex items-center justify-between">
+            <span class="text-blue-400">SAST: <span id="kpiSastCount">0</span></span>
+            <span class="text-purple-400">SCA: <span id="kpiScaCount">0</span></span>
+          </div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Engine distribution</div>
+        </div>
+
+        <!-- Fixed / Resolved -->
+        <div class="bg-slate-900/90 border border-emerald-900/40 rounded-xl p-3 shadow-sm">
+          <div class="text-[10px] font-semibold text-emerald-400 uppercase">Fixed / Resolved</div>
+          <div id="kpiFixed" class="text-2xl font-bold text-emerald-400 mt-1">0</div>
+          <div class="text-[10px] text-emerald-300/60 mt-0.5">Closed Flaws</div>
+        </div>
+
+      </div>
+
+      <!-- ================= TABULAR METRIC 1: SEVERITY & MITIGATION BY SCAN TYPE MATRIX ================= -->
+      <div class="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl overflow-hidden space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-slate-200 flex items-center space-x-2">
+              <i class="fa-solid fa-table-cells text-blue-400"></i>
+              <span>Tabular Matrix: Scan Type x Severity x Mitigation Status Data</span>
+            </h3>
+            <p class="text-xs text-slate-400">Complete cross-tabulation of sandbox reported vulnerabilities by scan type, severity level, and mitigation state</p>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-800">
+          <table class="w-full text-left text-xs">
+            <thead class="table-header">
+              <tr>
+                <th class="px-4 py-3">Scan Type</th>
+                <th class="px-3 py-3 text-center">Severity</th>
+                <th class="px-3 py-3 text-center font-bold text-white bg-slate-800/80">Total Flaws</th>
+                <th class="px-3 py-3 text-center text-rose-400 font-bold">Unmitigated</th>
+                <th class="px-3 py-3 text-center text-blue-400 font-semibold">Mitigation Proposed</th>
+                <th class="px-3 py-3 text-center text-cyan-400 font-semibold">Mitigation Approved</th>
+                <th class="px-3 py-3 text-center text-purple-400">Mitigation Rejected</th>
+                <th class="px-3 py-3 text-center text-emerald-400 font-bold">Fixed / Resolved</th>
+              </tr>
+            </thead>
+            <tbody id="severityMitigationMatrixTableBody" class="divide-y divide-slate-800 bg-slate-900/60">
+              <tr>
+                <td colspan="8" class="px-4 py-6 text-center text-slate-500">Loading metrics...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ================= TABULAR METRIC 2 & 3: MITIGATION OVERVIEW & PER-SANDBOX BREAKDOWN ================= -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        
+        <!-- Table 2: Mitigation Status Distribution -->
+        <div class="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="text-sm font-bold text-cyan-300 flex items-center space-x-2">
+                <i class="fa-solid fa-shield-virus text-cyan-400"></i>
+                <span>Mitigation Status Overview</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">Summary across SAST vs SCA engines</p>
+            </div>
+            <span class="text-[10px] bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800">Governance</span>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-800">
+            <table class="w-full text-left text-xs">
+              <thead class="table-header">
+                <tr>
+                  <th class="px-3 py-2.5">Mitigation Status</th>
+                  <th class="px-3 py-2.5 text-center text-blue-400">SAST</th>
+                  <th class="px-3 py-2.5 text-center text-purple-400">SCA</th>
+                  <th class="px-3 py-2.5 text-center font-bold text-white">Total</th>
+                  <th class="px-3 py-2.5 text-right font-mono">% Share</th>
+                </tr>
+              </thead>
+              <tbody id="mitigationSummaryTableBody" class="divide-y divide-slate-800 bg-slate-900/60">
+                <tr>
+                  <td colspan="5" class="px-3 py-4 text-center text-slate-500">No mitigation data available</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Table 3: Per-Sandbox Breakdown Table -->
+        <div class="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="text-sm font-bold text-emerald-300 flex items-center space-x-2">
+                <i class="fa-solid fa-folder-tree text-emerald-400"></i>
+                <span>Per-Sandbox Breakdown</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">Flaw distribution per selected branch sandbox</p>
+            </div>
+            <span class="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800">Sandboxes</span>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-800 max-h-64 overflow-y-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="table-header sticky top-0">
+                <tr>
+                  <th class="px-3 py-2.5">Sandbox</th>
+                  <th class="px-3 py-2.5 text-center">Status</th>
+                  <th class="px-3 py-2.5 text-center font-bold text-white">Flaws</th>
+                  <th class="px-3 py-2.5 text-center text-red-400">Crit/High</th>
+                  <th class="px-3 py-2.5 text-center text-rose-400">Unmitigated</th>
+                </tr>
+              </thead>
+              <tbody id="sandboxesSummaryTableBody" class="divide-y divide-slate-800 bg-slate-900/60">
+                <tr>
+                  <td colspan="5" class="px-3 py-4 text-center text-slate-500">No sandboxes selected</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ================= TABULAR METRIC 4 & 5: CWE & SCA COMPONENTS ================= -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        
+        <!-- Table 4: Top SAST CWE Categories -->
+        <div class="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="text-sm font-bold text-blue-300 flex items-center space-x-2">
+                <i class="fa-solid fa-bug text-blue-400"></i>
+                <span>Top SAST Vulnerability Categories (CWE)</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">Weakness taxonomy identified in code</p>
+            </div>
+            <span class="text-[10px] bg-blue-950 text-blue-300 px-2 py-0.5 rounded border border-blue-800">Static</span>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-800 max-h-64 overflow-y-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="table-header sticky top-0">
+                <tr>
+                  <th class="px-3 py-2.5 text-center">#</th>
+                  <th class="px-3 py-2.5">CWE ID</th>
+                  <th class="px-3 py-2.5">Category Name</th>
+                  <th class="px-3 py-2.5 text-center font-bold">Count</th>
+                  <th class="px-3 py-2.5 text-center text-rose-400">Unmit</th>
+                  <th class="px-3 py-2.5 text-center">Max Sev</th>
+                </tr>
+              </thead>
+              <tbody id="sastCweTableBody" class="divide-y divide-slate-800 bg-slate-900/60">
+                <tr>
+                  <td colspan="6" class="px-3 py-4 text-center text-slate-500">No SAST flaws recorded</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Table 5: SCA Vulnerable Components & CVEs -->
+        <div class="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="text-sm font-bold text-purple-300 flex items-center space-x-2">
+                <i class="fa-solid fa-cubes text-purple-400"></i>
+                <span>SCA Vulnerable Components & CVEs</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">Dependencies with known CVE advisories</p>
+            </div>
+            <span class="text-[10px] bg-purple-950 text-purple-300 px-2 py-0.5 rounded border border-purple-800">SCA</span>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-800 max-h-64 overflow-y-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="table-header sticky top-0">
+                <tr>
+                  <th class="px-3 py-2.5">Component</th>
+                  <th class="px-3 py-2.5">Version</th>
+                  <th class="px-3 py-2.5">CVE Advisory</th>
+                  <th class="px-3 py-2.5 text-center">CVSS</th>
+                  <th class="px-3 py-2.5 text-center font-bold">Flaws</th>
+                  <th class="px-3 py-2.5 text-center text-rose-400">Unmit</th>
+                </tr>
+              </thead>
+              <tbody id="scaComponentsTableBody" class="divide-y divide-slate-800 bg-slate-900/60">
+                <tr>
+                  <td colspan="6" class="px-3 py-4 text-center text-slate-500">No SCA vulnerabilities recorded</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ================= DETAILED VULNERABILITIES LIST TABLE (WITH DESCRIPTION, MITIGATION, FIRST FOUND) ================= -->
+    <section class="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl space-y-4">
+      
+      <!-- Table Header & Controls Bar -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-100 flex items-center space-x-2">
+            <i class="fa-solid fa-list-check text-emerald-400"></i>
+            <span>Sandbox Vulnerabilities Register (All Reported Instances)</span>
+          </h2>
+          <p class="text-xs text-slate-400">Granular flaw register showing description, mitigation status, vulnerability first found date, and locations</p>
+        </div>
+      </div>
+
+      <!-- Filters Row -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-xs">
+        
+        <!-- Scan Type Tabs -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Scan Type</label>
+          <div class="inline-flex rounded-lg border border-slate-700 p-0.5 bg-slate-950 w-full">
+            <button id="filterTypeAll" onclick="setScanTypeFilter('ALL')" class="flex-1 py-1 rounded text-center font-medium bg-blue-600 text-white transition">All</button>
+            <button id="filterTypeSast" onclick="setScanTypeFilter('SAST')" class="flex-1 py-1 rounded text-center font-medium text-slate-300 hover:text-white transition">SAST</button>
+            <button id="filterTypeSca" onclick="setScanTypeFilter('SCA')" class="flex-1 py-1 rounded text-center font-medium text-slate-300 hover:text-white transition">SCA</button>
+          </div>
+        </div>
+
+        <!-- Severity Filter -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Severity</label>
+          <select id="filterSeverity" onchange="applyFilters()" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <option value="ALL">All Severities</option>
+            <option value="5">Very High (5)</option>
+            <option value="4">High (4)</option>
+            <option value="3">Medium (3)</option>
+            <option value="2">Low (2)</option>
+            <option value="1">Very Low (1)</option>
+            <option value="0">Informational (0)</option>
+          </select>
+        </div>
+
+        <!-- Mitigation Status Filter -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Mitigation Status</label>
+          <select id="filterMitigation" onchange="applyFilters()" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <option value="ALL">All Mitigation States</option>
+            <option value="Unmitigated">Unmitigated</option>
+            <option value="Mitigation Proposed">Mitigation Proposed</option>
+            <option value="Mitigation Approved">Mitigation Approved</option>
+            <option value="Mitigation Rejected">Mitigation Rejected</option>
+            <option value="Fixed / Resolved">Fixed / Resolved</option>
+          </select>
+        </div>
+
+        <!-- Keyword Search -->
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Search Keywords</label>
+          <div class="relative">
+            <input type="text" id="filterSearch" oninput="applyFilters()" placeholder="CWE, CVE, file, description, ID..." class="w-full bg-slate-950 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-500 text-xs"></i>
+          </div>
+        </div>
+
+        <!-- Open Only Checkbox -->
+        <div class="flex items-end pb-1.5">
+          <label class="inline-flex items-center cursor-pointer space-x-2">
+            <input type="checkbox" id="filterOpenOnly" onchange="applyFilters()" class="rounded bg-slate-950 border-slate-700 text-blue-600 focus:ring-0">
+            <span class="text-xs text-slate-300">Open Flaws Only</span>
+          </label>
+        </div>
+
+      </div>
+
+      <!-- Vulnerabilities Data Table (With Module, Description, Mitigation Status, First Found Date) -->
+      <div class="overflow-x-auto rounded-xl border border-slate-800">
+        <table class="w-full text-left text-xs">
+          <thead class="table-header">
+            <tr>
+              <th class="px-3 py-3">App</th>
+              <th class="px-3 py-3">Sandbox</th>
+              <th class="px-3 py-3">Module</th>
+              <th class="px-2 py-3 text-center">Type</th>
+              <th class="px-2.5 py-3 font-mono">Issue ID</th>
+              <th class="px-2 py-3 text-center">Severity</th>
+              <th class="px-3 py-3">Category / Title</th>
+              <th class="px-3 py-3">Description</th>
+              <th class="px-3 py-3 text-center">Mitigation Status</th>
+              <th class="px-2.5 py-3 text-center">First Found</th>
+              <th class="px-3 py-3">Location</th>
+              <th class="px-2 py-3 text-center">Inspect</th>
+            </tr>
+          </thead>
+          <tbody id="vulnerabilitiesTableBody" class="divide-y divide-slate-800 bg-slate-900/60">
+            <tr>
+              <td colspan="12" class="px-4 py-8 text-center text-slate-500">
+                <i class="fa-solid fa-spinner fa-spin text-xl text-blue-400 mb-2"></i>
+                <div>Loading sandbox vulnerabilities...</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Table Pagination and Stats Footer -->
+      <div class="flex items-center justify-between text-xs text-slate-400 pt-1">
+        <div id="vulnerabilityCountDisplay">Showing 0 flaws</div>
+        <div class="text-[11px] text-slate-500">All data directly derived from latest sandbox scans</div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ================= VULNERABILITY DETAILS MODAL ================= -->
+  <div id="flawDetailModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden animate-fade-in">
+      
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+        <div class="flex items-center space-x-2.5 flex-wrap gap-y-1">
+          <span id="modalScanTypeBadge" class="text-xs font-bold px-2 py-0.5 rounded bg-blue-900 text-blue-200">SAST</span>
+          <span id="modalSandboxBadge" class="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">Sandbox</span>
+          <span id="modalModuleBadge" class="text-xs bg-slate-800 text-amber-300 px-2 py-0.5 rounded font-mono">Module</span>
+          <h3 id="modalFlawTitle" class="text-base font-bold text-white truncate max-w-sm">Vulnerability Details</h3>
+        </div>
+        <button onclick="closeDetailModal()" class="text-slate-400 hover:text-white transition text-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 overflow-y-auto space-y-4 text-xs text-slate-300">
+        
+        <!-- Metadata Chips -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+          <div>
+            <span class="text-slate-400 text-[10px] uppercase block">Issue ID</span>
+            <span id="modalIssueId" class="code-font text-cyan-400 font-bold">--</span>
+          </div>
+          <div>
+            <span class="text-slate-400 text-[10px] uppercase block">Severity</span>
+            <span id="modalSeverity" class="font-bold">--</span>
+          </div>
+          <div>
+            <span class="text-slate-400 text-[10px] uppercase block">Mitigation Status</span>
+            <span id="modalMitigationStatus" class="font-semibold">--</span>
+          </div>
+          <div>
+            <span class="text-slate-400 text-[10px] uppercase block">First Identified Date</span>
+            <span id="modalFirstFound" class="text-slate-300 font-mono">--</span>
+          </div>
+        </div>
+
+        <!-- CWE / CVE Advisory -->
+        <div id="modalAdvisoryBox" class="bg-blue-950/30 border border-blue-800/40 p-3.5 rounded-xl space-y-1">
+          <span class="text-[10px] text-blue-400 font-bold uppercase tracking-wider block">Security Standard Reference</span>
+          <div id="modalAdvisoryText" class="text-sm font-semibold text-blue-200">--</div>
+        </div>
+
+        <!-- Target Location Box -->
+        <div class="space-y-1">
+          <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Target Location (File & Line / Component)</span>
+          <div class="bg-slate-950 border border-slate-800 p-3 rounded-xl code-font text-xs text-slate-200 break-all" id="modalLocationText">
+            --
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div class="space-y-1">
+          <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Vulnerability Description</span>
+          <div id="modalDescription" class="bg-slate-950 border border-slate-800 p-3.5 rounded-xl leading-relaxed text-slate-200 text-xs">
+            --
+          </div>
+        </div>
+
+        <!-- Remediation Guidance -->
+        <div class="space-y-1">
+          <span class="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">Actionable Remediation Guidance</span>
+          <div id="modalRemediation" class="bg-emerald-950/30 border border-emerald-800/40 p-3.5 rounded-xl leading-relaxed text-emerald-200">
+            --
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-3 border-t border-slate-800 bg-slate-950 flex justify-end">
+        <button onclick="closeDetailModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-1.5 rounded-lg text-xs font-semibold transition">
+          Close
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= VERACODE AUTH & SETTINGS MODAL ================= -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden animate-fade-in">
+      
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+        <div class="flex items-center space-x-2.5">
+          <i class="fa-solid fa-shield-halved text-blue-400 text-lg"></i>
+          <h3 class="text-base font-bold text-white">Veracode API Authentication</h3>
+        </div>
+        <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-white transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 space-y-4 text-xs">
+        
+        <!-- Security Notice -->
+        <div class="bg-blue-950/40 border border-blue-800/40 p-3 rounded-xl text-[11px] text-blue-200 leading-relaxed">
+          <i class="fa-solid fa-lock text-blue-400 mr-1.5"></i>
+          <strong>Security Guarantee:</strong> Credentials are only used in volatile server memory for HMAC-SHA256 request signing. They are never written to disk, exposed in client responses, or logged.
+        </div>
+
+        <!-- API ID Field -->
+        <div>
+          <label class="block font-semibold text-slate-300 uppercase tracking-wider mb-1">Veracode API ID</label>
+          <input type="text" id="inputApiId" placeholder="e.g. 5a1b2c3d..." class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs">
+        </div>
+
+        <!-- API Secret Field -->
+        <div>
+          <label class="block font-semibold text-slate-300 uppercase tracking-wider mb-1">Veracode API Secret Key</label>
+          <input type="password" id="inputApiSecret" placeholder="••••••••••••••••••••••••••••••••" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-xs">
+        </div>
+
+        <!-- Region Selector -->
+        <div>
+          <label class="block font-semibold text-slate-300 uppercase tracking-wider mb-1">Veracode Platform Region</label>
+          <select id="selectRegion" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs">
+            <option value="us">US Commercial (api.veracode.com)</option>
+            <option value="eu">European Union (api.veracode.eu)</option>
+            <option value="us-gov">US Federal / Gov (api.veracode.us)</option>
+          </select>
+        </div>
+
+        <!-- Connection Test Output Box -->
+        <div id="testOutputBox" class="hidden p-3 rounded-xl text-xs font-mono"></div>
+
+        <!-- Fast Toggle Demo Mode -->
+        <div class="pt-2 border-t border-slate-800 flex items-center justify-between">
+          <span class="text-slate-400">Evaluation / Testing:</span>
+          <button type="button" onclick="handleEnableMockMode()" class="bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-800 px-3 py-1.5 rounded-lg text-xs font-medium transition">
+            <i class="fa-solid fa-flask mr-1"></i>Switch to Demo Simulation Mode
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-3.5 border-t border-slate-800 bg-slate-950 flex items-center justify-between">
+        <button type="button" onclick="handleTestConnection()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition">
+          <i class="fa-solid fa-plug text-cyan-400 mr-1.5"></i>Test Connection
+        </button>
+
+        <div class="flex items-center space-x-2">
+          <button type="button" onclick="closeSettingsModal()" class="text-slate-400 hover:text-slate-200 px-3 py-1.5 text-xs">
+            Cancel
+          </button>
+          <button type="button" onclick="handleSaveCredentials()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-lg text-xs font-semibold transition">
+            Apply Credentials
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Custom JavaScript Logic -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
